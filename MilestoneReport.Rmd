@@ -1,0 +1,316 @@
+---
+title: "Milestone Report - Data Science Capstone"
+author: "Karl Melgarejo Castillo"
+date: "December 27, 2021"
+output: 
+  html_document:
+    keep_md: true
+---
+
+## Executive summary
+
+In this document I report the exploratory analysis of the training data provided for the Data Science Capstone course, which comes from a corpus called HC Corpora and were collected from publicly available sources by a web crawler. 
+
+As the assignment indicates, this document will explain only the major features of the mentioned data set. At the end, I briefly summarize my plans for creating the prediction algorithm in a Shiny application.
+
+The codes in R that I created to perform this analysis can be accessed from my GitHub repository <https://github.com/KarlMC83/DataScienceCapstone_MilestoneReport>. 
+
+## 1.Exploratory analysis
+
+As was indicated in the section *"Task 1 - Getting and cleaning the data"*, I will explore the **English database** of the training data, which has three files with text extracted from Twitter, News and Blogs sources.
+
+These databases are large as it is shown in the tables below, in which it is reported the basic characteristics of each database such as the size, number of lines and number of words (e.g. the bigger one has more than 2.3 million of lines and more than 30 million of words). Therefore, in order to extract the main features in an efficient manner, I selected randomly a sample of lines from each database by using a binomial process, procedure that guarantees that the sample is representative of the original. The size of these samples are 0.1%, 1% and 0.1%, respectively; the second sample has a bigger percentage due to the relatively smaller size of the original database.  
+
+```{r, echo=FALSE, message = FALSE, warning=FALSE}
+# 0. Installing TM package
+library(tm)
+library(tokenizers)
+library(ngram)
+library("RWeka")
+library("stringi")
+
+# 1. Reading data sets from my local file and taking samples
+setwd("C:/Users/KARL/Dropbox/Cursos online/Johns Hopkins - Coursera/10 Data Science Capstone/Coursera-SwiftKey/final")
+
+set.seed(26122021)
+
+  # 1.1. US data sets
+        #1.1.1 Twitter
+        # Using "Connections" in R
+con <- file("./en_US/en_US.twitter.txt", "r")
+
+dt1 <- readLines(con) 
+
+        # Basic characteristics of the data set
+dt1_bc <- paste("Original File size:", format(object.size(dt1),units="Mb"),
+        "  Lines in Original File:", length(dt1), "  Words in Original File:", sum(stri_count_words(dt1)))
+
+        # Randomly sample lines with rbinom 
+
+dt1 <- dt1[as.logical(rbinom(length(dt1), 1, .001))]
+
+dt1_bc_s <- paste("Sample File size:", format(object.size(dt1),units="Mb"),
+    "  Lines in Sample File:", length(dt1), "  Words in Sample File:", sum(stri_count_words(dt1)))
+
+        # Close connection
+
+close(con)
+
+  #1.1.2 News
+        # Using "Connections" in R
+con <- file("./en_US/en_US.news.txt", "r")
+
+dt2 <- readLines(con) 
+
+        # Basic characteristics of the data set
+dt2_bc <- paste("Original File size:", format(object.size(dt2),units="Mb"),
+                "  Lines in Original File:", length(dt2), "  Words in Original File:", sum(stri_count_words(dt2)))
+
+        # Randomly sample lines with rbinom 
+
+dt2 <- dt2[as.logical(rbinom(length(dt2), 1, .01))]
+
+dt2_bc_s <- paste("Sample File size:", format(object.size(dt2),units="Mb"),
+    "  Lines in Sample File:", length(dt2), "  Words in Sample File:", sum(stri_count_words(dt2)))
+
+        # Close connection
+
+close(con)
+
+
+  #1.1.3 Blogd
+        # Using "Connections" in R
+con <- file("./en_US/en_US.blogs.txt", "r")
+
+dt3 <- readLines(con) 
+
+        # Basic characteristics of the data set
+dt3_bc <- paste("Original File size:", format(object.size(dt3),units="Mb"),
+                "  Lines in Original File:", length(dt3), "  Words in Original File:", sum(stri_count_words(dt3)))
+        # Randomly sample lines with rbinom 
+
+dt3 <- dt3[as.logical(rbinom(length(dt3), 1, .001))]
+
+dt3_bc_s <- paste("Sample File size:", format(object.size(dt3),units="Mb"),
+    "  Lines in Sample File:", length(dt3), "  Words in Sample file:", sum(stri_count_words(dt3)))
+
+        # Close connection
+
+close(con)
+```
+
+**Twitter Database**
+```{r,  echo=FALSE}
+dt1_bc
+dt1_bc_s
+```
+
+**News Database**
+```{r,  echo=FALSE}
+dt2_bc
+dt2_bc_s
+```
+
+**Blogs Database**
+```{r,  echo=FALSE}
+dt3_bc
+dt3_bc_s
+```
+
+### 1.1. The importance of pre-processing
+
+In this section I show the importance of pre-processing the databases. In the graph below, it is reported the 10 most frequent words in each database, and we can see that they share similar words. In fact, the most used word is **"the"**, followed by **"and"**, words that don't provide important information given that they are common articles and conjunctions used in any language. For this reason, the three databases were pre-processed in order to remove these type of words, punctuation, numbers and other special characters. The results are shown in the next sections. 
+
+```{r, echo=FALSE, message = FALSE, warning=FALSE}
+# 2. Using the "tm" package to create a Corpus file
+dt1_c <- Corpus(VectorSource(dt1))
+dt2_c <- Corpus(VectorSource(dt2))
+dt3_c <- Corpus(VectorSource(dt3))
+
+# Matrix from a corpus
+dtm1 <-DocumentTermMatrix(dt1_c)
+dtm2 <-DocumentTermMatrix(dt2_c)
+dtm3 <-DocumentTermMatrix(dt3_c)
+```
+
+
+```{r, echo=FALSE, message = FALSE, warning=FALSE, fig.align = 'center'}
+w_freq1 <- colSums(as.matrix(dtm1))
+ord1 <- order(w_freq1, decreasing = TRUE)
+w_freq2 <- colSums(as.matrix(dtm2))
+ord2 <- order(w_freq2, decreasing = TRUE)
+w_freq3 <- colSums(as.matrix(dtm3))
+ord3 <- order(w_freq3, decreasing = TRUE)
+par(mfrow=c(3,1))
+barplot(w_freq1[head(ord1, 10)], horiz=F, col="black", 
+                main = "Twitter database: 10 most frequent words", ylab = "Frequency", xlab="Words")
+barplot(w_freq2[head(ord2, 10)], horiz=F, col="blue", 
+                main = "News database: 10 most frequent words", ylab = "Frequency", xlab="Words")
+barplot(w_freq3[head(ord3, 10)], horiz=F, col="gray", 
+                main = "Blogs database: 10 most frequent words", ylab = "Frequency", xlab="Words")
+        
+```
+
+
+```{r, echo=FALSE, message = FALSE, warning=FALSE}
+# 3. Pre-processing the data
+dt1_c <- tm_map(dt1_c, stripWhitespace)
+dt1_c <- tm_map(dt1_c, content_transformer(tolower))
+dt1_c <- tm_map(dt1_c, removeWords, stopwords("en"))
+dt1_c <- tm_map(dt1_c, removePunctuation)
+dt1_c <- tm_map(dt1_c, removeNumbers)
+
+dt2_c <- tm_map(dt2_c, stripWhitespace)
+dt2_c <- tm_map(dt2_c, content_transformer(tolower))
+dt2_c <- tm_map(dt2_c, removeWords, stopwords("en"))
+dt2_c <- tm_map(dt2_c, removePunctuation)
+dt2_c <- tm_map(dt2_c, removeNumbers)
+
+dt3_c <- tm_map(dt3_c, stripWhitespace)
+dt3_c <- tm_map(dt3_c, content_transformer(tolower))
+dt3_c <- tm_map(dt3_c, removeWords, stopwords("en"))
+dt3_c <- tm_map(dt3_c, removePunctuation)
+dt3_c <- tm_map(dt3_c, removeNumbers)
+
+# Matrix from a corpus
+dtm1 <-DocumentTermMatrix(dt1_c)
+dtm2 <-DocumentTermMatrix(dt2_c)
+dtm3 <-DocumentTermMatrix(dt3_c)
+
+```
+
+
+### 1.2. 1-gram analysis
+
+In this section I report features of the three databases (after pre-processing) by analyzing the ten most frequent words in each one. This type of analysis is also known as *n-gram* analysis, in which a continuous sequence of *n* words from a given sample of text is extracted and evaluated. In this case, *n* is equal to 1, which is also referred to as *unigram*.
+
+As it is shown below, **"just"** is the most used word in the Twitter sample, followed by **"like"** and **"day"**. In the News sample, **"said"** is the most frequent word, followed by **"will"** and **"one"**. While in the Blogs sample, **"can"** is the most frequent word, followed by **"one"** and **"just"**. Another feature is that the three databases share common words such as **"will"** and **"can"**, but samples from  Twitter and Blogs share even more common words which could be explained by the fact that they are written in an *informal* form, while News uses a *formal* writing. 
+
+```{r, echo=FALSE, message = FALSE, warning=FALSE, fig.align = 'center'}
+w_freq1 <- colSums(as.matrix(dtm1))
+ord1 <- order(w_freq1, decreasing = TRUE)
+
+w_freq2 <- colSums(as.matrix(dtm2))
+ord2 <- order(w_freq2, decreasing = TRUE)
+
+w_freq3 <- colSums(as.matrix(dtm3))
+ord3 <- order(w_freq3, decreasing = TRUE)
+
+par(mfrow=c(3,1))
+barplot(w_freq1[head(ord1, 10)], horiz=F, col="black", 
+                main = "Twitter Database: 10 most frequent words (1-gram)", ylab = "Frequency", xlab="Words")
+barplot(w_freq2[head(ord2, 10)], horiz=F, col="blue", 
+                main = "News Database: 10 most frequent words (1-gram)", ylab = "Frequency", xlab="Words")
+barplot(w_freq3[head(ord3, 10)], horiz=F, col="gray", 
+                main = "Blogs Database: 10 most frequent words (1-gram)", ylab = "Frequency", xlab="Words")
+      
+```
+
+On the other hand, in the table below I show words that are more associated with the most frequent word in each database, and the corresponding correlation is also reported. We can extract two features from this table, about the number of associated words and their correlation. In the Twitter sample, the most frequent word has fewer associated words and smaller correlations. In the News sample, the most frequent word has more associated words and higher correlations. And in the Blogs sample, the most frequent word has the largest number of associated words and highest correlations. 
+
+These features could be associated with the form in which each type of text is written, which could be an important component in creating a prediction algorithm. It remains to see if these features also hold for the rest of frequent words in each database.  
+
+**Twitter sample: associations and their correlation with the most frequent word "just"**
+```{r, echo=FALSE}
+#Find associations        
+findAssocs(dtm1,"just",0.16)
+#0.162
+```
+
+**News sample: associations and their correlation with the most frequent word "said"**
+```{r, echo=FALSE}
+findAssocs(dtm2,"said",0.191)
+```
+
+**Blogs sample: associations and their correlation with the most frequent word "can"**
+```{r, echo=FALSE}
+findAssocs(dtm3,"can",0.42)
+```
+
+### 1.3. 2-gram analysis
+
+In this section I report the *2-gram* analysis, which consists of extracting a continuous sequence of *2* words from the three databases given. This is also referred to as *bigram* analysis.
+
+As we can see in the next graph, **"right now"**, **"high school"**, **"feel like"** are the most frequent phrases used in the Twitter, News and Blogs databases, respectively. On the other hand, Twitter and Blogs databases share again common phrases, such as **"right now"**, **"feel like"**, **"last night"** among others; while there are no common phrases shared with the News database. As in the *1-gram* analysis, this feature could be explained by the *formal* or *informal* writing use in each database. 
+
+Thus, "2-gram" phrases could be also an important component in creating a prediction algorithm.
+
+```{r, echo=FALSE, message = FALSE, warning=FALSE, fig.align = 'center'}
+ng1_2 <- NGramTokenizer(dt1_c, Weka_control(min=2, max=2))
+ng1_2f <- data.frame(table(ng1_2))
+ng1_2f <- ng1_2f[order(ng1_2f$Freq, decreasing = TRUE),]
+
+ng2_2 <- NGramTokenizer(dt2_c, Weka_control(min=2, max=2))
+ng2_2f <- data.frame(table(ng2_2))
+ng2_2f <- ng2_2f[order(ng2_2f$Freq, decreasing = TRUE),]
+
+ng3_2 <- NGramTokenizer(dt3_c, Weka_control(min=2, max=2))
+ng3_2f <- data.frame(table(ng3_2))
+ng3_2f <- ng3_2f[order(ng3_2f$Freq, decreasing = TRUE),]
+
+par(mfrow=c(3,1))
+barplot(height = ng1_2f$Freq[1:10], names = ng1_2f$ng1_2[1:10] ,horiz=F, col="black", 
+        main = "Twitter Database: 10 most frequent words (2-gram)", ylab = "Frequency", las=2)
+barplot(height = ng2_2f$Freq[1:10], names = ng2_2f$ng2_2[1:10] ,horiz=F, col="blue", 
+        main = "News Database: 10 most frequent words (2-gram)", ylab = "Frequency", las=2)
+barplot(height = ng3_2f$Freq[1:10], names = ng3_2f$ng3_2[1:10] ,horiz=F, col="red", 
+        main = "Blogs Database: 10 most frequent words (2-gram)", ylab = "Frequency", las=2)
+
+```
+
+
+### 1.4. 3-gram analysis
+
+In this section I report the *3-gram* analysis, which consists of extracting a continuous sequence of *3* words from the three databases given. This is also referred to as *trigram* analysis.
+
+In this case, there aren't any common phrases shared in the three databases, and the common phrases have small frequencies. This feature could indicate that when the phrase gets larger (e.g. more than 2 words), it becomes more specific to the type of source from which it was extracted. 
+
+This feature suggests that "3-gram" phrases won't probably be a helpful component in creating a prediction algorithm.
+
+
+```{r, echo=FALSE, message = FALSE, warning=FALSE}
+ng1_3 <- NGramTokenizer(dt1_c, Weka_control(min=3, max=3))
+ng1_3f <- data.frame(table(ng1_3))
+ng1_3f <- ng1_3f[order(ng1_3f$Freq, decreasing = TRUE),]
+
+ng2_3 <- NGramTokenizer(dt2_c, Weka_control(min=3, max=3))
+ng2_3f <- data.frame(table(ng2_3))
+ng2_3f <- ng2_3f[order(ng2_3f$Freq, decreasing = TRUE),]
+
+ng3_3 <- NGramTokenizer(dt3_c, Weka_control(min=3, max=3))
+ng3_3f <- data.frame(table(ng3_3))
+ng3_3f <- ng3_3f[order(ng3_3f$Freq, decreasing = TRUE),]
+```
+
+```{r, echo=FALSE, message = FALSE, warning=FALSE, fig.align = 'center'}
+par(mar=c(9,4,4,4))
+barplot(height = ng1_3f$Freq[1:10], names = ng1_3f$ng1_3[1:10] ,horiz=F, col="black", 
+        main = "Twitter Database: 10 most frequent words (3-gram)", ylab = "Frequency", las=2, cex.names = 0.7)
+```
+
+```{r, echo=FALSE, message = FALSE, warning=FALSE, fig.align = 'center'}
+par(mar=c(9,4,4,4))
+barplot(height = ng2_3f$Freq[1:10], names = ng2_3f$ng2_3[1:10] ,horiz=F, col="blue", 
+        main = "News Database: 10 most frequent words (3-gram)", ylab = "Frequency", las=2, cex.names = 0.7)
+```
+
+```{r, echo=FALSE, message = FALSE, warning=FALSE, fig.align = 'center'}
+par(mar=c(10,4,4,4))
+barplot(height = ng3_3f$Freq[1:10], names = ng3_3f$ng3_3[1:10] ,horiz=F, col="red", 
+        main = "Blogs Database: 10 most frequent words (3-gram)", ylab = "Frequency", las=2, cex.names = 0.7)
+```
+
+## 2. Plan for creating a prediction algorithm
+
+I consider that the following points and steps could be helpful in creating a prediction algorithm:
+
+- The 1-gram analysis seems to provide valuable information about the main features of a text sample. The frequencies of the 10 most common words were relevant and also the association with other words, which could help in predicting words in an efficient manner. 
+- Nevertheless, the prediction power of these words depends on the type of writing, being less powerful if it is written in Twitter and higher if it is written in News and much higher for Blogs.
+- As a pending exercise, it would be important to calculate the percentage of words covered by the 100 most common words and also their association with other words, for each type of text source. This can give us an idea of the potential predicting power of our model.
+- The 2-gram analysis seems to provide also valuable information, but in a lesser extent. Thus, this analysis should be used to complement and boost the predicting power of the 1-gram analysis.
+- The 3-gram analysis didn't provide valuable information. This suggests that dimension of an *n-gram* analysis should be as a maximum 3 or 4.
+
+The end.
+
+
+
